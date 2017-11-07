@@ -1,11 +1,11 @@
 <?php
 /*
 Plugin Name: FWP+: GAFFer (Grab All Fulltext & Feature images)
-Plugin URI: https://github.com/radgeek/FWP---SIC--Em
+Plugin URI: https://github.com/radgeek/fwp-gaffer/
 Description: A FeedWordPress add-on that allows you to grab full-text contents and make a best guess at setting featured images for syndicated content.
-Author: Charles Johnson
-Version: 2017.0901
-Author URI: http://projects.radgeek.com
+Author: C. Johnson
+Version: 2017.1107
+Author URI: http://feedwordpress.radgeek.com
 */
 
 require_once(dirname(__FILE__).'/sicwebimage.class.php');
@@ -32,23 +32,6 @@ if (isset($ref[1])) :
 else : // Something went wrong. Let's just guess.
 	$gfi_path = 'fwp-gaffer';
 endif;
-
-// to do this well, we need to use cron-based updates, and to check in frequently
-function fwpgfi_add_every6mins ($schedules) {
-	// add 'every6mins' to the existing set
-	$schedules['every6mins'] = array(
-		'interval' => 360,
-		'display' => 'Every 6 Minutes',
-	);
-	return $schedules;
-}
-add_filter('cron_schedules', 'fwpgfi_add_every6mins');
-
-register_deactivation_hook(__FILE__, 'fwpgfi_deactivation');
-
-function fwpgfi_deactivation() {
-	wp_clear_scheduled_hook('fwpgfi_scheduled_update');
-}
 
 class GrabFeaturedImages {
 	var $name;
@@ -77,40 +60,7 @@ class GrabFeaturedImages {
 			add_action('admin_init', array($this, 'fix_async_upload_image'), 10);
 		endif;
 
-		add_action('init', array($this, 'init'), 10);
-		add_action('fwpgfi_scheduled_update', array($this, 'scheduled_update'), 10);
 	} /* GrabFeaturedImages::__construct() */
-
-	public function init () {
-		if (! wp_next_scheduled('fwpgfi_scheduled_update') ) :
-			wp_schedule_event(time()+360, 'every6mins', 'fwpgfi_scheduled_update');
-		endif;
-	} /* GrabFeaturedImages::init() */
-
-	public function scheduled_update () {
-		// Construct our magic update URL
-		$url = site_url();
-		if (strpos($url, '?') == false) :
-			$sep = '?';
-		else :
-			$sep = '&';
-		endif;
-		$url = $url . $sep . 'update_feedwordpress=1';
-
-		// Set up headers and timeout
-		$headers = array();
-		$headers['Connection'] = 'close';
-		
-		$timeout = 300;
-
-		// Now send an HTTP request to ping the magic update URL
-		if (!FWPGFI_DEBUG_MODE) :		
-			$http = wp_remote_request($url, array(
-				'headers' => $headers,
-				'timeout' => $timeout,
-			));
-		endif;
-	} /* GrabFeaturedImages::scheduled_update() */
 
 	////////////////////////////////////////////////////////////////////////////
 	// SETTINGS UI /////////////////////////////////////////////////////////////

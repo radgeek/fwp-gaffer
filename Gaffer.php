@@ -970,7 +970,10 @@ endforeach; ?></td>
 
 					// Let's try to head off potential encoding issues at the pass here.
 					$data = mb_convert_encoding($data, 'html-entities', mb_detect_encoding($data));
+
+					$oDoc->documentURI = $url;
 					$oDoc->loadHTML($data, LIBXML_ERR_NONE);
+
 					$oXPath = new DOMXpath($oDoc);
 					libxml_clear_errors();
 
@@ -1004,7 +1007,8 @@ endforeach; ?></td>
 
 								$data = '';
 								foreach ($cEls as $oEl) :
-									self::scrubHTMLElements($oEl, $outFilter, $inFilter);
+
+									self::scrubHTMLElements($oEl, $outFilter, $inFilter, $url, $mimetype, $http['headers']);
 									$data .= self::DOMInnerHTML($oEl);
 								endforeach;
 								break; // exit foreach
@@ -1014,6 +1018,7 @@ endforeach; ?></td>
 
 					// Now wrap it in the characteristic HTML block element
 					$text = FWPGFI_FULL_HTML_PRE.$data.FWPGFI_FULL_HTML_POST;
+
 				endswitch;
 			endif;
 		else :
@@ -1279,10 +1284,15 @@ EOJSON;
 		endif;
 	}
 
-	static public function scrubHTMLElements(DOMNode $element, $outFilter, $inFilter, $xpath = null, $level = 0) {
+	static public function scrubHTMLElements(DOMNode $element, $outFilter, $inFilter, $baseUrl, $mimetype, $headers, $xpath = null, $level = 0) {
 
 		if (!isset($element->ownerDocument) or is_null($element->ownerDocument)) :
 			return;
+		endif;
+
+		// respect xml:base if provided, and let children inherit it
+		if (!is_null($child->baseURI)) :
+			$baseUrl = $child->baseURI;
 		endif;
 
 		$tagName = self::NodeToHTML($element);
@@ -1352,13 +1362,15 @@ EOJSON;
 				$tagName = self::NodeToHTML($child);				
 				switch ($action) :
 				case 'retain' :
+					self::ConvertAttributesToAbsoluteURLs($child, $baseUrl);
+
 					FeedWordPress::diagnostic('gfi:capture:htmltree', "HTML Parsing: ".str_repeat("===", $level+1)." Retaining whitelisted element [$tagName] (".json_encode($inFilter).")");
-					self::scrubHTMLElements($child, $outFilter, '*', $xpath, $level+1);
+					self::scrubHTMLElements($child, $outFilter, '*', $baseUrl, $mimetype, $headers, $xpath, $level+1);
 					break;
 				case 'descend' :
 					FeedWordPress::diagnostic('gfi:capture:htmltree', "HTML Parsing: ".str_repeat("===", $level+1)." Descending into greylisted element [$tagName] (".json_encode($inFilter).")");
 
-					self::scrubHTMLElements($child, $outFilter, $inFilter, $xpath, $level+1);
+					self::scrubHTMLElements($child, $outFilter, $inFilter, $baseUrl, $mimetype, $headers, $xpath, $level+1);
 					if (count($child->childNodes) > 0) :
 						$toBubble = array();						
 						foreach ($child->childNodes as $grandchild) :
@@ -1389,7 +1401,47 @@ EOJSON;
 	    endforeach;
 
 	    return $innerHTML; 
-	} 
+	}
+	
+	static private function ConvertAttributesToAbsoluteURLs ($child, $baseUrl) {
+		$urlTagAttrs = array (
+			array('a', 'href'),
+			array('applet', 'codebase'),
+			array('area', 'href'),
+			array('blockquote', 'cite'),
+			array('body', 'background'),
+			array('del', 'cite'),
+			array('form', 'action'),
+			array('frame', 'longdesc'),
+			array('frame', 'src'),
+			array('iframe', 'longdesc'),
+			array('iframe', 'src'),
+			array('head', 'profile'),
+			array('img', 'longdesc'),
+			array('img', 'src'),
+			array('img', 'usemap'),
+			array('input', 'src'),
+			array('input', 'usemap'),
+			array('ins', 'cite'),
+			array('link', 'href'),
+			array('object', 'classid'),
+			array('object', 'codebase'),
+			array('object', 'data'),
+			array('object', 'usemap'),
+			array('q', 'cite'),
+			array('script', 'src')
+		);
+
+		foreach ($urlTagAttrs as list($el, $attr)) :
+			if ($el==$child->nodeName) :
+				if ($child->hasAttribute($attr)) :
+					$url = $child->getAttribute($attr);
+					$url = SimplePie_Misc::absolutize_url($url, $baseUrl);
+					$child->setAttribute($attr, $url);
+				endif;
+			endif;
+		endforeach;
+	} /* AbsolutizeURLs */
 } /* class GrabFeaturedImages */
 
 

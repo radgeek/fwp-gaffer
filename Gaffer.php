@@ -4,7 +4,7 @@ Plugin Name: FWP+: GAFFer (Grab All Fulltext & Feature images)
 Plugin URI: https://github.com/radgeek/fwp-gaffer/
 Description: A FeedWordPress add-on that allows you to grab full-text contents and make a best guess at setting featured images for syndicated content.
 Author: C. Johnson
-Version: 2017.1107
+Version: 2018.0115
 Author URI: http://feedwordpress.radgeek.com
 */
 

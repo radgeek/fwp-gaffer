@@ -4,7 +4,7 @@ Plugin Name: FWP+: GAFFer (Grab All Fulltext & Feature images)
 Plugin URI: https://github.com/radgeek/fwp-gaffer/
 Description: A FeedWordPress add-on that allows you to grab full-text contents and make a best guess at setting featured images for syndicated content.
 Author: C. Johnson
-Version: 2018.0115
+Version: 2018.0128
 Author URI: http://feedwordpress.radgeek.com
 */
 
@@ -680,6 +680,7 @@ endforeach; ?></td>
 						if ($ok) :
 							$zapit = true;
 							$captured_from[] = time()." ".$url." ".substr(FeedWordPress::val($post_content),0,128);
+							$this->revise_word_counts($post);
 						else :
 							$failed_from[] = time()." ".$url." ".substr(FeedWordPress::val($post_content),0,128);
 
@@ -1267,6 +1268,21 @@ EOJSON;
 		return $tabs;
 	} /* GrabFeaturedImages::media_upload_tabs () */
 
+	private function revise_word_counts ($post) {
+		global $fwpPostSizeLimiter;
+		if ($post->ID > 0) :
+			// check to see if FWP+: Limit size of posts is installed
+			if (isset($fwpPostSizeLimiter) and is_object($fwpPostSizeLimiter)) :
+
+				$aLengths = $fwpPostSizeLimiter->count_lengths($post->post_content);
+				foreach ($aLengths as $units => $measure) :
+					$metaKey = 'fwplsop count '.$units;
+					update_post_meta($post->ID, $metaKey, $measure);
+				endforeach;
+			endif;
+		endif;
+	} /* GrabFeaturedImages::revise_word_counts () */
+
 	static private function NodeToHTML (DOMNode $element) {
 		$tagName = $element->nodeName;
 		if (!is_null($element->attributes)) :
@@ -1405,35 +1421,54 @@ EOJSON;
 	
 	static private function ConvertAttributesToAbsoluteURLs ($child, $baseUrl) {
 		$urlTagAttrs = array (
-			array('a', 'href'),
-			array('applet', 'codebase'),
-			array('area', 'href'),
-			array('blockquote', 'cite'),
-			array('body', 'background'),
-			array('del', 'cite'),
-			array('form', 'action'),
-			array('frame', 'longdesc'),
-			array('frame', 'src'),
-			array('iframe', 'longdesc'),
-			array('iframe', 'src'),
-			array('head', 'profile'),
-			array('img', 'longdesc'),
-			array('img', 'src'),
-			array('img', 'usemap'),
-			array('input', 'src'),
-			array('input', 'usemap'),
-			array('ins', 'cite'),
-			array('link', 'href'),
-			array('object', 'classid'),
-			array('object', 'codebase'),
-			array('object', 'data'),
-			array('object', 'usemap'),
-			array('q', 'cite'),
-			array('script', 'src')
+			array('a', 'href', array()),
+			array('applet', 'codebase', array()),
+			array('area', 'href', array()),
+			array('blockquote', 'cite', array()),
+			array('body', 'background', array()),
+			array('del', 'cite', array()),
+			array('form', 'action', array()),
+			array('frame', 'longdesc', array()),
+			array('frame', 'src', array()),
+			array('iframe', 'longdesc', array()),
+			array('iframe', 'src', array()),
+			array('head', 'profile', array()),
+			array('img', 'longdesc', array()),
+			array('img', 'src', array('data-lazy-src')),
+			array('img', 'usemap', array()),
+			array('input', 'src', array()),
+			array('input', 'usemap', array()),
+			array('ins', 'cite', array()),
+			array('link', 'href', array()),
+			array('object', 'classid', array()),
+			array('object', 'codebase', array()),
+			array('object', 'data', array()),
+			array('object', 'usemap', array()),
+			array('q', 'cite', array()),
+			array('script', 'src', array())
 		);
 
-		foreach ($urlTagAttrs as list($el, $attr)) :
+		foreach ($urlTagAttrs as list($el, $attr, $synonyms)) :
 			if ($el==$child->nodeName) :
+				// This element uses some custom dynamic juju that doesn't
+				// work very well across locations (image lazy-loading or
+				// the like). So let's grab the value and jam it over into
+				// a standard HTML attribute instead. FIXME: this probably
+				// would be better handled as a filter, and also done by
+				// the FeedWordPress core as well as this add-on?
+				if (count($synonyms) > 0) :
+					foreach ($synonyms as $synonym) :
+						if ($child->hasAttribute($synonym)) :
+							$newUrl = $child->getAttribute($synonym);
+							$child->setAttribute($attr, $newUrl);
+							$child->removeAttribute($synonym);
+						endif;
+					endforeach;				
+				endif;
+
+				// This attribute contains a URI/URL. We need to convert
+				// relative URLs to absolute URLs for this to work when
+				// we copy HTML to a new location.
 				if ($child->hasAttribute($attr)) :
 					$url = $child->getAttribute($attr);
 					$url = SimplePie_Misc::absolutize_url($url, $baseUrl);

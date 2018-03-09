@@ -4,7 +4,7 @@ Plugin Name: FWP+: GAFFer (Grab All Fulltext & Feature images)
 Plugin URI: https://github.com/radgeek/fwp-gaffer/
 Description: A FeedWordPress add-on that allows you to grab full-text contents and make a best guess at setting featured images for syndicated content.
 Author: C. Johnson
-Version: 2018.0128
+Version: 2018.0309
 Author URI: http://feedwordpress.radgeek.com
 */
 
@@ -106,6 +106,8 @@ class GrabFeaturedImages {
 	function display_queue ($page, $box = NULL) {
 		$posts = array(); $urls = array();
 		$q = new WP_Query(array(
+		'post_type' => 'any',
+		'post_status' => 'any',
 		'meta_key' => '_syndicated_full_html_capture',
 		'posts_per_page' => -1,
 		'order' => 'ASC',
@@ -642,6 +644,8 @@ endforeach; ?></td>
 
 		// Let's do this.
 		$q = new WP_Query(array(
+		'post_type' => 'any',
+		'post_status' => 'any',
 		'meta_key' => '_syndicated_full_html_capture',
 		'posts_per_page' => $this->process_posts_max(),
 		'order' => 'ASC',
@@ -734,6 +738,7 @@ endforeach; ?></td>
 		// Let's do this.
 		$q = new WP_Query(array(
 		'post_type' => 'any',
+		'post_status' => 'any',
 		'meta_key' => '_syndicated_image_capture',
 		'posts_per_page' => 10,
 		));

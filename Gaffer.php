@@ -161,8 +161,8 @@ endforeach; ?></td>
 
 	public function display_full_text_settings ($page, $box = NULL) {
 		$grabFullHTMLSelector = array(
-		"no" => __("<strong>Use contents from feed:</strong> Keep the contents or excerpt provided by the feed"),
-		"yes" => __("<strong>Retrieve full text from web:</strong> Attempt to retrieve full text from <code>http://example.com/page/1</code>, using the included link"),
+		"no" => __("**Use contents from feed:** Keep the contents or excerpt provided by the feed"),
+		"yes" => __("**Retrieve full text from web:** Attempt to retrieve full text from ``http://example.com/page/1``, using the included link"),
 		);
 		$gfhParams = array(
 		'input-name' => "gfi_grab_full_html",
@@ -366,57 +366,61 @@ endforeach; ?></td>
 	} /* GrabFeaturedImages::display_settings() */
 	
 	public function save_settings ($params, $page) {
-		if (isset($params['gfi_feature_images'])) :
-			$page->update_setting('feature captured images', $params['gfi_feature_images']);
-			$page->update_setting('featured image default', $params['gfi_default_featured_image']);
+		
+		$gfi = FeedWordPress::post( 'gfi_feature_images', null );
+		if ( ! is_null( $gfi ) ) :
+		
+			$page->update_setting('feature captured images', $gfi );
+			$page->update_setting('featured image default', FeedWordPress::post( 'gfi_default_featured_image', null ) );
 			
 			// empty strings mean a null value
 			foreach (array('crop ratio', 'resize') as $key) :
 				$idx = "gfi_" . str_replace(" ", "_", $key);
 				$setting = 'gfi ' . $key;
 
-				if (strlen(trim($params[$idx])) > 0) :
-					$page->update_setting($setting, $params[$idx]);
+				$set = FeedWordPress::post( $idx, '' );
+				if ( strlen( trim( $set ) ) > 0 ) :
+					$page->update_setting( $setting, $set );
 				else :
-					$page->update_setting($setting, NULL);
+					$page->update_setting( $setting, NULL );
 				endif;
 			endforeach;
 
-			// collapse arrays to strings
-			foreach (array('mime_whitelist', 'mime_blacklist') as $key) :
-				if (is_array($params["gfi_$key"])) :
-					$params["gfi_$key"] = implode("|", $params["gfi_$key"]);
-				endif;
-			endforeach;
-			
 			// check for enabling checkmark
-			foreach (array('min_width', 'min_height', 'mime_whitelist', 'mime_blacklist') as $key) :
-				if (isset($params["gfi_${key}_use"]) and "yes"==strtolower($params["gfi_${key}_use"])) :
-					$update_to = $params["gfi_${key}"];
+			foreach ( array( 'min_width', 'min_height', 'mime_whitelist', 'mime_blacklist' ) as $key ) :
+				$use = FeedWordPress::post( "gfi_${key}_use", 'no' );
+				if ( "yes" == strtolower( $use ) ) :
+					$update_to = FeedWordPress::post( "gfi_${key}", '' );
+					
+					// collapse arrays to strings
+					if ( is_array( $update_to ) ) :
+						$update_to = implode("|", $update_to );
+					endif;
+					
 				else :
 					$update_to = NULL;
 				endif;
 				
-				$spacedKey = str_replace("_", " ", $key);
-				$page->update_setting("gfi ${spacedKey}", $update_to);
+				$spacedKey = str_replace( "_", " ", $key );
+				$page->update_setting( "gfi ${spacedKey}", $update_to );
 			endforeach;
 			
-			$page->update_setting('gfi strip featured image', $params["gfi_strip_featured_image"]);
-			$page->update_setting('gfi strip uncacheable images', $params["gfi_strip_uncacheable_images"]);
+			$page->update_setting('gfi strip featured image', FeedWordPress::post( "gfi_strip_featured_image", null ) );
+			$page->update_setting('gfi strip uncacheable images', FeedWordPress::post( "gfi_strip_uncacheable_images", null ) );
 
-			$page->update_setting('grab full html', $params['gfi_grab_full_html']);
+			$page->update_setting('grab full html', FeedWordPress::post( 'gfi_grab_full_html', null ) );
 
-			$rootElements = preg_replace('/[\r\n]+/', "\n", trim($params['fwpgfi_root_elements']));
+			$rootElements = preg_replace('/[\r\n]+/', "\n", trim( FeedWordPress::post( 'fwpgfi_root_elements', '' ) ) );
 			$page->update_setting('fwpgfi root elements', $rootElements);
 
-			$filterOut = preg_replace('/[\r\n]+/', "\n", trim($params['fwpgfi_filter_out']));
+			$filterOut = preg_replace('/[\r\n]+/', "\n", trim( FeedWordPress::post( 'fwpgfi_filter_out', '' ) ) );
 			$page->update_setting('fwpgfi filter out', $filterOut);
 
-			$filterIn = preg_replace('/[\r\n]+/', "\n",trim($params['fwpgfi_filter_in']));
+			$filterIn = preg_replace( '/[\r\n]+/', "\n", trim( FeedWordPress::post( 'fwpgfi_filter_in', '' ) ) );
 			$filterIn = $page->update_setting('fwpgfi filter in', $filterIn);
 
 			if ($page->for_default_settings()) :
-				update_option('fwpgfi_process_posts_max', $params['fwpgfi_process_posts_max']);
+				update_option('fwpgfi_process_posts_max', FeedWordPress::post( 'fwpgfi_process_posts_max', null ) );
 
 			endif;
 
@@ -442,12 +446,15 @@ endforeach; ?></td>
 			// without tags) then it probably is not a full HTML feed
 			$sumLen = 0.0;
 			$aPosts = $post->link->live_posts();
-			foreach ($aPosts as $oItem) :
-				$sumLen += 1.0*strlen(strip_tags($oItem->get_content()));
-			endforeach;
-			$avgLen = ($sumLen / count($aPosts));
-			if ($avgLen < 1000) :
-				$probablyNotFullHTML = true;
+			if ( is_countable( $aPosts ) && count( $aPosts ) > 0 ) :
+				foreach ($aPosts as $oItem) :
+					$sumLen += 1.0*strlen(strip_tags($oItem->get_content()));
+				endforeach;
+				$avgLen = ( $sumLen / count( $aPosts ) );
+				
+				if ($avgLen < 1000) :
+					$probablyNotFullHTML = true;
+				endif;
 			endif;
 		endif;
 
@@ -455,7 +462,7 @@ endforeach; ?></td>
 ?>
 			<div style="background-color: #ffd0d0; padding: 0em 1em 1em 1em; width: 50%;">
 			<p><strong>Full HTML?</strong> Some features of this feed seem to indicate that this feed may be carrying only excerpts and not the full HTML of syndicated posts.</p>
-			<p>When a syndicated post includes a short text description and a 	link to the full story at <code>http://example.com/page/1</code>,</p>
+			<p>When a syndicated post includes a short text description and a link to the full story at <code>http://example.com/page/1</code>,</p>
 			<ul class="options">
 			<li><label style="font-weight: normal"><input name="gfi_grab_full_html" value="no" type="radio">
 			<strong>Use contents from feed:</strong> Keep the contents or excerpt provided by the feed</label></li>
@@ -597,7 +604,7 @@ endforeach; ?></td>
 		endforeach;
 
 		# (2) Check for a specially marked-up indicator of a thumbnail/Feature Image link
-		if (is_array($thumb_links) and count($thumb_links) > 0) :
+		if (is_array( $thumb_links ) && count( $thumb_links ) > 0) :
 			foreach ($thumb_links as $href) :
 				$ret['_syndicated_image_capture'][] = $href;
 				$ret['_syndicated_image_featured'][] = $href;
@@ -605,14 +612,14 @@ endforeach; ?></td>
 		endif;
 		
 		# (3) Check for all <link rel="enclosure"/> elements that may indicate an image of interest
-		if (is_array($link_elements) and count($link_elements) > 0) :
+		if (is_array( $link_elements ) && count( $link_elements ) > 0) :
 			foreach ($link_elements as $href) :
 				$ret['_syndicated_image_capture'][] = $href;
 			endforeach;
 		endif;
 
 		# (4) Check enclosures and <media:group/> elements
-		if (is_array($enclosures) and count($enclosures) > 0) :
+		if (is_array( $enclosures ) && count( $enclosures ) > 0) :
 			foreach ($enclosures as $enclosure) :
 				$ret['_syndicated_image_capture'][] = $enclosure->get_link();
 			endforeach;
@@ -666,7 +673,8 @@ endforeach; ?></td>
 			$post_images = array();
 			$post_content = $post->post_content;
 
-			if ((count($urls) > 0) and !!$urls[0] and ('yes'==$source->setting('grab full html', 'grab_full_html', FWPGFI_GRAB_FULL_HTML_DEFAULT))) :
+			$nUrls = ( is_countable( $urls ) ? count( $urls ) : 0 );
+			if ( ( $nUrls > 0 ) && !!$urls[0] && ( 'yes' == $source->setting( 'grab full html', 'grab_full_html', FWPGFI_GRAB_FULL_HTML_DEFAULT ) ) ) :
 				
 				foreach ($urls as $url) :
 					if ($url) :
@@ -688,7 +696,7 @@ endforeach; ?></td>
 						else :
 							$failed_from[] = time()." ".$url." ".substr(FeedWordPress::val($post_content),0,128);
 
-							if (count($failed_from) > 3) : // strikes and yr out
+							if ( is_countable( $failed_from ) && count( $failed_from ) > 3 ) : // strikes and yr out
 								$zapit = true;
 							endif;
 						endif;
@@ -708,7 +716,7 @@ endforeach; ?></td>
 			$post_images = $aaImgs['_syndicated_image_capture'];
 
 			// Tack on the URLs of images included in the <img /> tags.
-			if (count($post_images) > 0) :
+			if ( is_countable( $post_images ) && count( $post_images ) > 0) :
 				foreach ($post_images as $img) :
 					add_post_meta($post->ID, '_syndicated_image_capture', $img, /*unique=*/ false);
 				endforeach;
@@ -717,13 +725,13 @@ endforeach; ?></td>
 			if ($zapit) :
 				delete_post_meta($post->ID, '_syndicated_full_html_capture');
 			endif;
-			if (count($captured_from) > 0) :
+			if ( is_countable( $captured_from ) && count( $captured_from ) > 0) :
 				foreach ($captured_from as $url) :
 					add_post_meta($post->ID, 'html captured from', $url,
 					/*unique=*/ false);
 				endforeach;
 			endif;
-			if (count($failed_from) > 0) :
+			if ( is_countable( $failed_from ) && count($failed_from) > 0) :
 				delete_post_meta($post->ID, 'html capture failed');
 				foreach ($failed_from as $url) :
 					add_post_meta($post->ID, 'html capture failed', $url, /*unique=*/ false);
@@ -751,8 +759,9 @@ endforeach; ?></td>
 			
 			$source = get_syndication_feed_object($post->ID);
 			$replacements = array();
-
-			if ((count($imgs) > 0) and !!$imgs[0] and ('yes'==$source->setting('feature captured images', 'feature_captured_images', 'no'))) :
+			
+			$nImgs = ( is_countable( $imgs ) ? count( $imgs ) : 0 );
+			if (( $nImgs > 0 ) and !!$imgs[0] and ('yes'==$source->setting('feature captured images', 'feature_captured_images', 'no'))) :
 				$seekingFeature = ('yes' == $source->setting('feature captured images', 'feature_captured_images', NULL));
 
 				foreach ($imgs as $img) :
@@ -786,8 +795,9 @@ endforeach; ?></td>
 						// Set as featured image, if applicable.
 						if (($img_id > 0) and $seekingFeature) :
 							if (
-								count($featureUrls) == 0 // No featured specified
-								or in_array($img, $featureUrls) // Spec featured
+								! is_countable( $featureUrls )
+								or count( $featureUrls ) == 0 // No featured specified
+								or in_array( $img, $featureUrls ) // Spec featured
 							) :
 								update_post_meta($post->ID, '_thumbnail_id', $img_id);
 								$seekingFeature = false;
@@ -1139,10 +1149,10 @@ endforeach; ?></td>
 			$args['whitelist'] = array_filter($args['whitelist']);
 		endif;
 		
-		if (!isset($args['blacklist']) or count($args['blacklist'])==0) :
+		if ( ! isset( $args['blacklist'] ) || ! is_countable( $args['blacklist'] ) || count( $args['blacklist'] ) == 0 ) :
 			$args['blacklist'] = array();
 		endif;
-		if (!isset($args['whitelist']) or count($args['whitelist'])==0) :
+		if ( ! isset( $args['whitelist'] ) || ! is_countable( $args['whitelist'] ) || count( $args['whitelist'] ) == 0 ) :
 			$args['whitelist'] = array('.*');
 		endif;
 		
@@ -1392,7 +1402,7 @@ EOJSON;
 					FeedWordPress::diagnostic('gfi:capture:htmltree', "HTML Parsing: ".str_repeat("===", $level+1)." Descending into greylisted element [$tagName] (".json_encode($inFilter).")");
 
 					self::scrubHTMLElements($child, $outFilter, $inFilter, $baseUrl, $mimetype, $headers, $xpath, $level+1);
-					if (count($child->childNodes) > 0) :
+					if ( is_countable( $child->childNodes ) && count( $child->childNodes ) > 0) :
 						$toBubble = array();						
 						foreach ($child->childNodes as $grandchild) :
 							$toBubble[] = $grandchild;
@@ -1461,7 +1471,7 @@ EOJSON;
 				// a standard HTML attribute instead. FIXME: this probably
 				// would be better handled as a filter, and also done by
 				// the FeedWordPress core as well as this add-on?
-				if (count($synonyms) > 0) :
+				if ( is_countable( $synonyms ) && count($synonyms) > 0) :
 					foreach ($synonyms as $synonym) :
 						if ($child->hasAttribute($synonym)) :
 							$newUrl = $child->getAttribute($synonym);
